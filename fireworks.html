@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ljr_test2</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            overflow: hidden;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        .firework {
+            position: absolute;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        /* 控制面板样式 */
+        .controls {
+            position: fixed;
+            right: 12px;
+            bottom: 12px;
+            background: rgba(20, 20, 20, 0.6);
+            color: #fff;
+            padding: 10px 12px;
+            border-radius: 10px;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+            backdrop-filter: blur(6px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+            user-select: none;
+        }
+        .controls label {
+            display: block;
+            font-size: 12px;
+            margin: 6px 0 2px;
+        }
+        .controls input[type="range"] {
+            width: 180px;
+        }
+        .controls .row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 6px;
+        }
+        .btn {
+            background: #ff6b6b;
+            border: none;
+            color: #fff;
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+        .btn.secondary {
+            background: #4dabf7;
+        }
+        .btn.small { padding: 4px 8px; font-size: 12px; }
+        .status { font-size: 12px; opacity: 0.85; margin-top: 6px; }
+        .row input[type="file"] { max-width: 160px; }
+        .energy { height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden; width: 180px; }
+        .energy > span { display: block; height: 100%; width: 0%; background: linear-gradient(90deg,#4dabf7,#ff6b6b); }
+        /* 打赏弹窗样式 */
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 999; }
+        .modal.show { display: flex; }
+        .modal-box { background: #111; color: #fff; border-radius: 12px; padding: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); max-width: 80vw; }
+        .modal-box h3 { margin: 0 0 8px; font-weight: 600; }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+        .modal-box img { display: block; max-width: 70vw; max-height: 70vh; border-radius: 8px; }
+        .fallback { font-size: 12px; opacity: 0.85; display: none; }
+
+        /* 悬浮打赏按钮（更明显） */
+        .floating-donate {
+            position: fixed;
+            right: 14px;
+            bottom: 110px;
+            z-index: 1000;
+            background: linear-gradient(90deg,#ff6b6b,#ffa94d);
+            color: #fff;
+            border: none;
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-weight: 600;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform .15s ease, box-shadow .2s ease;
+            animation: pulse 2.6s infinite;
+        }
+        .floating-donate:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.45); }
+        @keyframes pulse { 0%{transform: scale(1)} 50%{transform: scale(1.05)} 100%{transform: scale(1)} }
+
+        /* 雅思口语陪练入口与弹窗 */
+        .floating-coach {
+            position: fixed; left: 50%; top: 50%; z-index: 1000;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(90deg,#4dabf7,#845ef7);
+            color: #fff; border: none; border-radius: 999px;
+            padding: 14px 18px; font-weight: 700; font-size: 16px;
+            box-shadow: 0 10px 26px rgba(132,94,247,0.45);
+            cursor: pointer; display: flex; align-items: center; gap: 8px;
+            transition: box-shadow .2s ease;
+            animation: pulseCenter 2.2s infinite;
+        }
+        .floating-coach:hover { box-shadow: 0 14px 32px rgba(132,94,247,0.55); }
+        .floating-coach::after {
+            content: ""; position: absolute; inset: -6px; border-radius: 999px;
+            box-shadow: 0 0 0 3px rgba(132,94,247,0.45);
+            animation: ring 1.8s ease-out infinite; pointer-events: none;
+        }
+        @keyframes pulseCenter { 0%{transform: translate(-50%,-50%) scale(1)} 50%{transform: translate(-50%,-50%) scale(1.05)} 100%{transform: translate(-50%,-50%) scale(1)} }
+        @keyframes ring { 0%{opacity:.8; transform:scale(1)} 100%{opacity:0; transform:scale(1.25)} }
+        .coach-modal { position: fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.6); z-index: 999; }
+        .coach-modal.show { display:flex; }
+        .coach-box { background:#111; color:#fff; border-radius:12px; padding:14px; box-shadow:0 8px 32px rgba(0,0,0,0.5); width:min(860px,90vw); }
+        .coach-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+        .coach-controls { display:flex; gap:8px; flex-wrap: wrap; margin:8px 0; }
+        .coach-log { background:#0c0c0c; border-radius:8px; padding:10px; max-height:45vh; overflow:auto; font-size:14px; line-height:1.5; }
+        .coach-log p { margin:6px 0; }
+        .coach-footer { display:flex; gap:8px; margin-top:10px; justify-content:flex-end; }
+        .tag { padding:2px 8px; border-radius:999px; background:#1b1b1b; font-size:12px; }
+    </style>
+</head>
+<body>
+    <canvas id="fireworksCanvas"></canvas>
+    <button id="floatingDonate" class="floating-donate" aria-label="打赏支持">💚 打赏支持</button>
+    <button id="floatingCoach" class="floating-coach" aria-label="雅思口语陪练">🗣️ 雅思陪练</button>
+    <div class="controls">
+        <div class="row">
+            <button id="toggleBtn" class="btn">暂停</button>
+            <button id="burstBtn" class="btn secondary">一键烟花</button>
+            <button id="donateBtn" class="btn small">打赏</button>
+        </div>
+        <div class="row">
+            <label><input id="aiMode" type="checkbox"> AI模式</label>
+            <button id="likeBtn" class="btn small secondary">喜欢👍</button>
+            <button id="dislikeBtn" class="btn small">不喜欢👎</button>
+        </div>
+        <div class="row">
+            <label><input id="musicSync" type="checkbox"> 音乐同步</label>
+            <input id="audioFile" type="file" accept="audio/*">
+            <button id="playMusicBtn" class="btn small secondary">播放</button>
+            <button id="pauseMusicBtn" class="btn small">暂停</button>
+        </div>
+        <label>密度（每帧发射概率）</label>
+        <input id="density" type="range" min="0" max="0.15" step="0.005" value="0.03">
+        <label>重力（粒子下落加速度）</label>
+        <input id="gravity" type="range" min="0" max="0.25" step="0.005" value="0.05">
+        <div class="row"><label><input id="trail" type="checkbox" checked> 尾迹</label></div>
+        <div id="aiStatus" class="status"></div>
+        <div id="musicStatus" class="status"></div>
+        <div class="energy"><span id="energyBar"></span></div>
+    </div>
+
+    <!-- 打赏弹窗 -->
+    <div id="donateModal" class="modal" aria-hidden="true">
+        <div class="modal-box" role="dialog" aria-modal="true">
+            <h3>打赏支持</h3>
+            <p class="fallback" id="donateFallback">请将你的收款码图片保存为 <code>donate.png</code> 或 <code>donate.jpg</code> 到站点根目录（与本页面同级），打开此弹窗即可显示。</p>
+            <img id="donateImg" src="donate.png" alt="打赏二维码">
+            <div class="modal-actions">
+                <a id="donateDownload" class="btn small secondary" href="donate.png" download>保存图片</a>
+                <button id="closeDonate" class="btn small">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 雅思口语陪练弹窗 -->
+    <div id="coachModal" class="coach-modal" aria-hidden="true">
+        <div class="coach-box" role="dialog" aria-modal="true">
+            <div class="coach-header">
+                <h3 style="margin:0">雅思口语陪练</h3>
+                <span class="tag">Beta</span>
+            </div>
+            <div class="coach-controls">
+                <select id="coachPart">
+                    <option value="1">Part 1 日常问答</option>
+                    <option value="2">Part 2 长段陈述</option>
+                    <option value="3">Part 3 深度讨论</option>
+                </select>
+                <select id="coachTopic">
+                    <option value="hometown">家乡</option>
+                    <option value="work">工作/学习</option>
+                    <option value="travel">旅行</option>
+                    <option value="technology">科技</option>
+                    <option value="environment">环境</option>
+                </select>
+                <button id="coachStart" class="btn small secondary">开始</button>
+                <button id="coachStop" class="btn small">结束</button>
+                <button id="coachExport" class="btn small">导出记录</button>
+            </div>
+            <div id="coachStatus" class="status"></div>
+            <div id="coachLog" class="coach-log" aria-live="polite"></div>
+            <div class="coach-footer">
+                <input id="coachText" type="text" placeholder="没有麦克风时在此输入回答" style="flex:1; padding:8px; border-radius:6px; border:none; background:#1b1b1b; color:#fff;">
+                <button id="coachSend" class="btn small secondary">发送</button>
+                <button id="closeCoach" class="btn small">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('fireworksCanvas');
+            const ctx = canvas.getContext('2d');
+            const dpr = Math.max(1, window.devicePixelRatio || 1);
+            // 星空数组需在 resize() 调用前声明
+            let stars = [];
+
+            // 设置高 DPI 画布大小
+            function resize() {
+                canvas.style.width = window.innerWidth + 'px';
+                canvas.style.height = window.innerHeight + 'px';
+                canvas.width = Math.floor(window.innerWidth * dpr);
+                canvas.height = Math.floor(window.innerHeight * dpr);
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                initStars();
+            }
+            resize();
+            
+            // 监听窗口大小变化
+            window.addEventListener('resize', resize);
+            
+            // 星空背景
+            function initStars() {
+                const count = Math.floor((window.innerWidth * window.innerHeight) / 12000); // 自适应数量
+                stars = new Array(count).fill(0).map(() => ({
+                    x: Math.random() * window.innerWidth,
+                    y: Math.random() * window.innerHeight,
+                    r: Math.random() * 1.6 + 0.4,
+                    baseAlpha: Math.random() * 0.6 + 0.2,
+                    phase: Math.random() * Math.PI * 2,
+                    twinkle: Math.random() * 0.8 + 0.2,
+                    drift: (Math.random() - 0.5) * 0.02
+                }));
+            }
+            function drawStars() {
+                // 渐变夜空
+                const g = ctx.createLinearGradient(0, 0, 0, window.innerHeight);
+                g.addColorStop(0, '#0b1023');
+                g.addColorStop(1, '#000000');
+                ctx.fillStyle = g;
+                ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+                // 星点
+                for (const s of stars) {
+                    s.phase += 0.02;
+                    s.x += s.drift;
+                    if (s.x < 0) s.x = window.innerWidth;
+                    if (s.x > window.innerWidth) s.x = 0;
+                    const a = s.baseAlpha * (0.6 + 0.4 * Math.sin(s.phase * s.twinkle));
+                    ctx.save();
+                    ctx.globalAlpha = a;
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                    ctx.fillStyle = '#cfe8ff';
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            // 烟花粒子类
+            class Particle {
+                constructor(x, y, color, gravity) {
+                    this.x = x;
+                    this.y = y;
+                    this.color = color;
+                    this.radius = Math.random() * 2 + 1;
+                    this.velocity = {
+                        x: (Math.random() - 0.5) * 10,
+                        y: (Math.random() - 0.5) * 10
+                    };
+                    this.alpha = 1;
+                    this.gravity = gravity;
+                    this.decay = 0.015;
+                    this.trail = [];
+                    this.maxTrail = 8;
+                }
+                
+                draw() {
+                    ctx.save();
+                    ctx.globalAlpha = this.alpha;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = this.color;
+                    ctx.fill();
+                    // 画尾迹
+                    if (trailEnabled && this.trail.length > 1) {
+                        ctx.globalAlpha = Math.max(0.05, this.alpha * 0.3);
+                        ctx.strokeStyle = this.color;
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(this.trail[0].x, this.trail[0].y);
+                        for (let i = 1; i < this.trail.length; i++) {
+                            ctx.lineTo(this.trail[i].x, this.trail[i].y);
+                        }
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+                
+                update() {
+                    this.velocity.y += this.gravity;
+                    this.x += this.velocity.x;
+                    this.y += this.velocity.y;
+                    this.alpha -= this.decay;
+                    // 更新尾迹
+                    this.trail.push({ x: this.x, y: this.y });
+                    if (this.trail.length > this.maxTrail) this.trail.shift();
+                    
+                    this.draw();
+                    return this.alpha > 0;
+                }
+            }
+            
+            // 烟花发射器
+            class Firework {
+                constructor(x = Math.random() * canvas.width / dpr,
+                            targetY = Math.random() * (canvas.height / dpr) * 0.5,
+                            hue = Math.random() * 360,
+                            gravity = 0.05,
+                            particleCount = null) {
+                    this.particles = [];
+                    this.color = `hsl(${hue}, 100%, 60%)`;
+                    this.x = x;
+                    this.y = canvas.height / dpr;
+                    this.targetY = targetY;
+                    this.gravity = gravity;
+                    this.speed = 5;
+                    this.velocity = (Math.random() - 0.5) * 2;
+                    this.particleCount = particleCount;
+                }
+                
+                update() {
+                    // 发射烟花到目标高度
+                    if (this.y > this.targetY) {
+                        this.y -= this.speed;
+                        this.x += this.velocity;
+                        
+                        // 绘制上升的烟花
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+                        ctx.fillStyle = this.color;
+                        ctx.fill();
+                        
+                        return true;
+                    } else {
+                        // 爆炸效果
+                        if (this.particles.length === 0) {
+                            const count = (this.particleCount != null)
+                                ? this.particleCount
+                                : 90 + Math.floor(Math.random() * 40);
+                            for (let i = 0; i < count; i++) {
+                                this.particles.push(new Particle(this.x, this.y, this.color, gravityValue));
+                            }
+                        }
+                        
+                        // 更新爆炸粒子
+                        for (let i = this.particles.length - 1; i >= 0; i--) {
+                            if (!this.particles[i].update()) {
+                                this.particles.splice(i, 1);
+                            }
+                        }
+                        
+                        return this.particles.length > 0;
+                    }
+                }
+            }
+            
+            // 烟花数组
+            const fireworks = [];
+            let running = true;
+            let spawnProbability = 0.03;
+            let gravityValue = 0.05;
+            let trailEnabled = true;
+            let aiEnabled = false;
+            let particleCountOverride = null;
+            let lastArmIndex = null;
+
+            // 音乐同步
+            let musicEnabled = false;
+            let audioCtx = null, analyser = null, sourceNode = null, audioEl = null;
+            let musicEnergy = 0; // 0~1
+            const energyBar = document.getElementById('energyBar');
+            const musicStatusEl = document.getElementById('musicStatus');
+            function updateMusicEnergy() {
+                if (!musicEnabled || !analyser) return 0;
+                const arr = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(arr);
+                // 低频更贴近鼓点：取前 64 个频段
+                let sum = 0; const n = Math.min(64, arr.length);
+                for (let i = 0; i < n; i++) sum += arr[i] / 255;
+                musicEnergy = Math.min(1, sum / n);
+                energyBar.style.width = Math.round(musicEnergy * 100) + '%';
+                musicStatusEl.textContent = musicEnabled ? `音乐能量 ${musicEnergy.toFixed(2)}` : '';
+                return musicEnergy;
+            }
+
+            // 简易多臂老虎机：若用户点赞则提升组合的期望奖励
+            const arms = [
+                { name: '柔和漂浮', spawn: 0.02, gravity: 0.02, hueMin: 180, hueMax: 260, count: 100 },
+                { name: '热烈爆裂', spawn: 0.06, gravity: 0.06, hueMin: 0,   hueMax: 60,  count: 130 },
+                { name: '清冷星河', spawn: 0.03, gravity: 0.035, hueMin: 260, hueMax: 320, count: 110 },
+                { name: '金色礼花', spawn: 0.03, gravity: 0.045, hueMin: 40,  hueMax: 60,  count: 90 }
+            ];
+            const stats = arms.map(() => ({ plays: 0, reward: 0 }));
+            const aiStatusEl = document.getElementById('aiStatus');
+
+            function chooseArm() {
+                const epsilon = 0.2; // 探索概率
+                if (Math.random() < epsilon) {
+                    return Math.floor(Math.random() * arms.length);
+                }
+                let best = 0; let bestScore = -Infinity;
+                for (let i = 0; i < arms.length; i++) {
+                    const s = stats[i];
+                    const avg = s.plays > 0 ? (s.reward / s.plays) : 0; // 乐观初始化可改进
+                    if (avg > bestScore) { bestScore = avg; best = i; }
+                }
+                return best;
+            }
+
+            function applyArm(i) {
+                const arm = arms[i];
+                spawnProbability = arm.spawn;
+                gravityValue = arm.gravity;
+                particleCountOverride = arm.count;
+                lastArmIndex = i;
+                aiStatusEl.textContent = `AI选择：${arm.name} | 密度 ${spawnProbability.toFixed(3)} | 重力 ${gravityValue.toFixed(3)} | 粒子 ${arm.count}`;
+            }
+            
+            // 动画循环
+            function animate() {
+                // 星空背景与拖影
+                drawStars();
+                if (trailEnabled) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+                    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+                }
+
+                // 更新和绘制烟花
+                for (let i = fireworks.length - 1; i >= 0; i--) {
+                    if (!fireworks[i].update()) {
+                        fireworks.splice(i, 1);
+                    }
+                }
+
+                // 随机添加新烟花
+                const energy = updateMusicEnergy();
+                const spawnBoost = musicEnabled ? (0.7 + energy * 1.5) : 1;
+                const effectiveSpawn = Math.min(0.18, spawnProbability * spawnBoost);
+                if (running && Math.random() < effectiveSpawn && fireworks.length < 10) {
+                    const hue = aiEnabled && lastArmIndex != null
+                        ? (arms[lastArmIndex].hueMin + Math.random() * (arms[lastArmIndex].hueMax - arms[lastArmIndex].hueMin))
+                        : Math.random() * 360;
+                    fireworks.push(new Firework(undefined, undefined, hue, gravityValue, particleCountOverride));
+                }
+
+                // 音乐脉冲：能量显著时触发礼花
+                if (musicEnabled && energy > 0.65 && fireworks.length < 12) {
+                    for (let i = 0; i < 2; i++) {
+                        const hue = aiEnabled && lastArmIndex != null
+                            ? (arms[lastArmIndex].hueMin + Math.random() * (arms[lastArmIndex].hueMax - arms[lastArmIndex].hueMin))
+                            : Math.random() * 360;
+                        fireworks.push(new Firework(Math.random() * (window.innerWidth), undefined, hue, gravityValue, (particleCountOverride || 120)));
+                    }
+                }
+
+                requestAnimationFrame(animate);
+            }
+            
+            // 启动动画
+            animate();
+
+            // 交互：点击/触摸生成烟花
+            function spawnAt(clientX, clientY) {
+                const rect = canvas.getBoundingClientRect();
+                const x = (clientX - rect.left);
+                const y = (clientY - rect.top);
+                const targetY = Math.max(60, y - 120);
+                const hue = aiEnabled && lastArmIndex != null
+                    ? (arms[lastArmIndex].hueMin + Math.random() * (arms[lastArmIndex].hueMax - arms[lastArmIndex].hueMin))
+                    : Math.random() * 360;
+                fireworks.push(new Firework(x, targetY, hue, gravityValue, particleCountOverride));
+            }
+            canvas.addEventListener('click', (e) => spawnAt(e.clientX, e.clientY));
+            canvas.addEventListener('touchstart', (e) => {
+                const t = e.touches[0];
+                spawnAt(t.clientX, t.clientY);
+            }, { passive: true });
+
+            // 控制面板逻辑
+            const toggleBtn = document.getElementById('toggleBtn');
+            const burstBtn = document.getElementById('burstBtn');
+            const density = document.getElementById('density');
+            const gravity = document.getElementById('gravity');
+            const trail = document.getElementById('trail');
+            const aiMode = document.getElementById('aiMode');
+            const likeBtn = document.getElementById('likeBtn');
+            const dislikeBtn = document.getElementById('dislikeBtn');
+            const musicSync = document.getElementById('musicSync');
+            const audioFile = document.getElementById('audioFile');
+            const playMusicBtn = document.getElementById('playMusicBtn');
+            const pauseMusicBtn = document.getElementById('pauseMusicBtn');
+            const donateBtn = document.getElementById('donateBtn');
+            const floatingDonate = document.getElementById('floatingDonate');
+            // Coach elements
+            const floatingCoach = document.getElementById('floatingCoach');
+            const coachModal = document.getElementById('coachModal');
+            const closeCoach = document.getElementById('closeCoach');
+            const coachStart = document.getElementById('coachStart');
+            const coachStop = document.getElementById('coachStop');
+            const coachExport = document.getElementById('coachExport');
+            const coachPart = document.getElementById('coachPart');
+            const coachTopic = document.getElementById('coachTopic');
+            const coachLog = document.getElementById('coachLog');
+            const coachText = document.getElementById('coachText');
+            const coachSend = document.getElementById('coachSend');
+            const coachStatus = document.getElementById('coachStatus');
+            const donateModal = document.getElementById('donateModal');
+            const closeDonate = document.getElementById('closeDonate');
+            const donateImg = document.getElementById('donateImg');
+            const donateFallback = document.getElementById('donateFallback');
+            const donateDownload = document.getElementById('donateDownload');
+            let donateTriedJpg = false;
+
+            toggleBtn.addEventListener('click', () => {
+                running = !running;
+                toggleBtn.textContent = running ? '暂停' : '继续';
+            });
+            burstBtn.addEventListener('click', () => {
+                for (let i = 0; i < 6; i++) {
+                    const hue = aiEnabled && lastArmIndex != null
+                        ? (arms[lastArmIndex].hueMin + Math.random() * (arms[lastArmIndex].hueMax - arms[lastArmIndex].hueMin))
+                        : Math.random() * 360;
+                    fireworks.push(new Firework(undefined, undefined, hue, gravityValue, particleCountOverride));
+                }
+            });
+            density.addEventListener('input', () => {
+                spawnProbability = parseFloat(density.value);
+            });
+            gravity.addEventListener('input', () => {
+                gravityValue = parseFloat(gravity.value);
+            });
+            trail.addEventListener('change', () => {
+                trailEnabled = trail.checked;
+            });
+
+            aiMode.addEventListener('change', () => {
+                aiEnabled = aiMode.checked;
+                if (aiEnabled) {
+                    const idx = chooseArm();
+                    applyArm(idx);
+                } else {
+                    aiStatusEl.textContent = '';
+                    particleCountOverride = null;
+                }
+            });
+
+            likeBtn.addEventListener('click', () => {
+                if (!aiEnabled || lastArmIndex == null) return;
+                stats[lastArmIndex].plays += 1;
+                stats[lastArmIndex].reward += 1; // 点赞记为正奖励
+                applyArm(chooseArm());
+            });
+            dislikeBtn.addEventListener('click', () => {
+                if (!aiEnabled || lastArmIndex == null) return;
+                stats[lastArmIndex].plays += 1; // 仅计一次尝试
+                applyArm(chooseArm());
+            });
+
+            // 音乐同步控制
+            musicSync.addEventListener('change', () => {
+                musicEnabled = musicSync.checked;
+                if (!musicEnabled) {
+                    musicStatusEl.textContent = '';
+                }
+            });
+            function setupAudioForFile(file) {
+                if (!file) return;
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioEl) {
+                    audioEl.pause();
+                    URL.revokeObjectURL(audioEl.src);
+                }
+                audioEl = new Audio();
+                audioEl.src = URL.createObjectURL(file);
+                audioEl.loop = true;
+                if (sourceNode) sourceNode.disconnect();
+                sourceNode = audioCtx.createMediaElementSource(audioEl);
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 1024;
+                sourceNode.connect(analyser);
+                analyser.connect(audioCtx.destination);
+                audioEl.play();
+                musicEnabled = true; musicSync.checked = true;
+                musicStatusEl.textContent = '音乐已加载并开始播放';
+            }
+            audioFile.addEventListener('change', () => setupAudioForFile(audioFile.files[0]));
+            playMusicBtn.addEventListener('click', async () => {
+                try {
+                    if (audioCtx) await audioCtx.resume();
+                    if (audioEl) await audioEl.play();
+                    musicEnabled = true; musicSync.checked = true;
+                } catch (e) { musicStatusEl.textContent = '播放失败：' + e.message; }
+            });
+            pauseMusicBtn.addEventListener('click', async () => {
+                try { if (audioEl) audioEl.pause(); } catch (e) {}
+            });
+
+            // 打赏弹窗交互
+            function loadDonateImage() {
+                donateFallback.style.display = 'none';
+                donateTriedJpg = false;
+                // 先尝试 PNG，带时间戳避免缓存
+                donateImg.src = '';
+                donateImg.src = 'donate.png?v=' + Date.now();
+                donateDownload.href = 'donate.png';
+            }
+            donateImg.addEventListener('error', () => {
+                if (!donateTriedJpg) {
+                    donateTriedJpg = true;
+                    donateImg.src = 'donate.jpg?v=' + Date.now();
+                    donateDownload.href = 'donate.jpg';
+                } else {
+                    donateFallback.style.display = 'block';
+                }
+            });
+            donateImg.addEventListener('load', () => { donateFallback.style.display = 'none'; });
+            donateBtn.addEventListener('click', () => { donateModal.classList.add('show'); loadDonateImage(); });
+            floatingDonate.addEventListener('click', () => { donateModal.classList.add('show'); loadDonateImage(); });
+            closeDonate.addEventListener('click', () => { donateModal.classList.remove('show'); });
+            donateModal.addEventListener('click', (e) => { if (e.target === donateModal) donateModal.classList.remove('show'); });
+
+            // ====== 雅思陪练逻辑 ======
+            const ieltsBank = {
+                1: {
+                    hometown: [
+                        'Where is your hometown?',
+                        'What do you like most about your hometown?',
+                        'Has your hometown changed much in recent years?'
+                    ],
+                    work: [
+                        'Are you a student or do you work?',
+                        'Why did you choose your major/job?',
+                        'What is a typical day like for you?'
+                    ],
+                    travel: [
+                        'Do you like travelling?',
+                        'What places have you visited recently?',
+                        'Do you prefer travelling alone or with others?'
+                    ]
+                },
+                2: {
+                    travel: ['Describe a memorable trip you had. You should say where you went, who you went with, what you did, and explain why it was memorable.'],
+                    technology: ['Describe a piece of technology that you find useful. You should say what it is, how you use it, how it helps you, and explain why it is important to you.'],
+                    environment: ['Describe a time you helped to protect the environment. You should say what you did, where you were, who was involved, and explain how you felt about it.']
+                },
+                3: {
+                    environment: [
+                        'What are the biggest environmental challenges in your country?',
+                        'Do you think individuals or governments should take the main responsibility? Why?',
+                        'How can technology help to solve environmental problems?'
+                    ],
+                    technology: [
+                        'How has technology changed the way people communicate?',
+                        'What are the risks of relying too much on technology?',
+                        'Should children be introduced to coding at school?'
+                    ]
+                }
+            };
+
+            let recog; let recognizing = false; let transcript = [];
+            const hasSTT = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+            function coachSpeak(text) {
+                try {
+                    const u = new SpeechSynthesisUtterance(text);
+                    u.rate = 1; u.pitch = 1; u.lang = 'en-US';
+                    speechSynthesis.cancel(); speechSynthesis.speak(u);
+                } catch (e) {}
+            }
+            function log(role, text) {
+                const p = document.createElement('p');
+                p.innerHTML = `<strong>${role}:</strong> ${text}`;
+                coachLog.appendChild(p);
+                coachLog.scrollTop = coachLog.scrollHeight;
+            }
+            function askNext() {
+                const part = coachPart.value; const topic = coachTopic.value;
+                const bank = ieltsBank[part];
+                let q;
+                if (Array.isArray(bank[topic])) {
+                    const arr = bank[topic]; q = arr[Math.floor(Math.random()*arr.length)];
+                } else { q = bank[topic]; }
+                const prompt = typeof q === 'string' ? q : q;
+                log('Coach', prompt);
+                coachSpeak(prompt);
+            }
+            function startRecognition() {
+                if (!hasSTT) { coachStatus.textContent = '当前浏览器不支持语音识别，请使用文本输入。'; return; }
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recog = new SR(); recog.lang = 'en-US'; recog.interimResults = false; recog.continuous = false;
+                recognizing = true; coachStatus.textContent = '正在聆听，请开始回答…';
+                recog.onresult = (e) => {
+                    const text = e.results[0][0].transcript;
+                    log('You', text); transcript.push({role:'user', text});
+                    giveFeedback(text);
+                    setTimeout(askNext, 1200);
+                };
+                recog.onerror = (e) => { coachStatus.textContent = '识别错误：' + e.error; recognizing = false; };
+                recog.onend = () => { recognizing = false; coachStatus.textContent = '已停止聆听'; };
+                try { recog.start(); } catch (e) {}
+            }
+            function stopRecognition() { try { if (recog && recognizing) recog.stop(); } catch (e) {} recognizing = false; }
+            function giveFeedback(text) {
+                // 简易打分：词数、填充词、语法指示词
+                const words = text.trim().split(/\s+/).length;
+                const fillers = (text.match(/\b(uh|um|like|you know|kind of)\b/gi)||[]).length;
+                const complex = (text.match(/\b(which|that|although|however|moreover|therefore)\b/gi)||[]).length;
+                const fluency = Math.max(0, Math.min(9, 5 + (words-20)/20 - fillers));
+                const vocab = Math.max(0, Math.min(9, 5 + complex));
+                const grammar = 5; // 占位，可扩展
+                const msg = `反馈：词数≈${words}，填充词${fillers}，复杂连接词${complex}。建议：放慢速度、使用更多连接词（for example, moreover）。`;
+                log('Coach', msg);
+                transcript.push({role:'coach', text: msg});
+                coachSpeak('Good job. Try to use more linking words and examples.');
+            }
+
+            function exportTxt() {
+                const lines = Array.from(coachLog.querySelectorAll('p')).map(p=>p.textContent);
+                const blob = new Blob([lines.join('\n')], {type:'text/plain'});
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ielts_practice.txt'; a.click(); URL.revokeObjectURL(a.href);
+            }
+
+            floatingCoach.addEventListener('click', () => { coachModal.classList.add('show'); coachLog.innerHTML=''; log('Coach','Welcome! Let\'s practice IELTS Speaking.'); askNext(); startRecognition(); });
+            closeCoach.addEventListener('click', () => { coachModal.classList.remove('show'); stopRecognition(); });
+            coachStart.addEventListener('click', () => { coachLog.innerHTML=''; askNext(); startRecognition(); });
+            coachStop.addEventListener('click', () => { stopRecognition(); coachStatus.textContent='已停止陪练'; });
+            coachExport.addEventListener('click', exportTxt);
+            coachSend.addEventListener('click', () => { const text = coachText.value.trim(); if(!text) return; coachText.value=''; log('You', text); giveFeedback(text); setTimeout(askNext, 1200); });
+        });
+    </script>
+</body>
+</html>

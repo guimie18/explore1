@@ -225,7 +225,8 @@
         document.addEventListener('DOMContentLoaded', function() {
             const canvas = document.getElementById('fireworksCanvas');
             const ctx = canvas.getContext('2d');
-            const dpr = Math.max(1, window.devicePixelRatio || 1);
+            const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+            const dpr = Math.min(isMobile ? 1.6 : 2, Math.max(1, window.devicePixelRatio || 1));
             // 星空数组需在 resize() 调用前声明
             let stars = [];
 
@@ -452,7 +453,15 @@
             }
             
             // 动画循环
+            let lastTime = performance.now();
+            let fpsAvg = 60;
+            let maxFireworks = isMobile ? 8 : 12;
             function animate() {
+                const now = performance.now();
+                const dt = Math.max(1, now - lastTime);
+                const fps = 1000 / dt;
+                fpsAvg = fpsAvg * 0.9 + fps * 0.1;
+                lastTime = now;
                 // 星空背景与拖影
                 drawStars();
                 if (trailEnabled) {
@@ -467,11 +476,13 @@
                     }
                 }
 
-                // 随机添加新烟花
+                // 随机添加新烟花（自适应降载）
                 const energy = updateMusicEnergy();
                 const spawnBoost = musicEnabled ? (0.7 + energy * 1.5) : 1;
-                const effectiveSpawn = Math.min(0.18, spawnProbability * spawnBoost);
-                if (running && Math.random() < effectiveSpawn && fireworks.length < 10) {
+                let effectiveSpawn = Math.min(0.18, spawnProbability * spawnBoost);
+                if (fpsAvg < 50) effectiveSpawn *= 0.75;
+                if (fpsAvg < 35) { effectiveSpawn *= 0.5; trailEnabled = false; maxFireworks = isMobile ? 6 : 10; }
+                if (running && Math.random() < effectiveSpawn && fireworks.length < maxFireworks - 2) {
                     const hue = aiEnabled && lastArmIndex != null
                         ? (arms[lastArmIndex].hueMin + Math.random() * (arms[lastArmIndex].hueMax - arms[lastArmIndex].hueMin))
                         : Math.random() * 360;
@@ -479,7 +490,7 @@
                 }
 
                 // 音乐脉冲：能量显著时触发礼花
-                if (musicEnabled && energy > 0.65 && fireworks.length < 12) {
+                if (musicEnabled && energy > 0.65 && fireworks.length < maxFireworks) {
                     for (let i = 0; i < 2; i++) {
                         const hue = aiEnabled && lastArmIndex != null
                             ? (arms[lastArmIndex].hueMin + Math.random() * (arms[lastArmIndex].hueMax - arms[lastArmIndex].hueMin))
@@ -505,9 +516,10 @@
                     : Math.random() * 360;
                 fireworks.push(new Firework(x, targetY, hue, gravityValue, particleCountOverride));
             }
-            canvas.addEventListener('click', (e) => spawnAt(e.clientX, e.clientY));
+            canvas.addEventListener('click', (e) => { unlockAudio(); spawnAt(e.clientX, e.clientY); });
             canvas.addEventListener('touchstart', (e) => {
                 const t = e.touches[0];
+                unlockAudio();
                 spawnAt(t.clientX, t.clientY);
             }, { passive: true });
 
@@ -754,8 +766,22 @@
                     u.rate = 1; u.pitch = 1;
                     const langSel = (document.getElementById('aiLang')||{value:'zh'}).value;
                     u.lang = langSel === 'en' ? 'en-US' : 'zh-CN';
+                    const voices = speechSynthesis.getVoices();
+                    const pick = voices.find(v=>v.lang?.toLowerCase().startsWith(u.lang.toLowerCase())) || voices[0];
+                    if (pick) u.voice = pick;
                     speechSynthesis.cancel(); speechSynthesis.speak(u);
                 } catch (e) {}
+            }
+            let audioUnlocked = false;
+            function unlockAudio() {
+                if (audioUnlocked) return; audioUnlocked = true;
+                try { if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); } catch(e) {}
+                try {
+                    const u = new SpeechSynthesisUtterance('.');
+                    u.volume = 0; u.lang = 'en-US';
+                    speechSynthesis.speak(u);
+                } catch(e) {}
+                try { speechSynthesis.getVoices(); } catch(e) {}
             }
             function log(role, text) {
                 const p = document.createElement('p');
@@ -823,7 +849,7 @@
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ielts_practice.txt'; a.click(); URL.revokeObjectURL(a.href);
             }
 
-            floatingCoach.addEventListener('click', () => { coachModal.classList.add('show'); coachLog.innerHTML=''; log('Coach','Welcome! Let\'s practice IELTS Speaking.'); askAiNext(); startRecognition(); startPron(); floatingCoach.style.display='none'; });
+            floatingCoach.addEventListener('click', () => { unlockAudio(); coachModal.classList.add('show'); coachLog.innerHTML=''; log('Coach','Welcome! Let\'s practice IELTS Speaking.'); askAiNext(); startRecognition(); startPron(); floatingCoach.style.display='none'; });
             closeCoach.addEventListener('click', () => { coachModal.classList.remove('show'); stopRecognition(); stopPron(); floatingCoach.style.display='flex'; });
             coachStart.addEventListener('click', () => { coachLog.innerHTML=''; askAiNext(); startRecognition(); startPron(); });
             coachStop.addEventListener('click', () => { stopRecognition(); stopPron(); coachStatus.textContent='已停止陪练'; });

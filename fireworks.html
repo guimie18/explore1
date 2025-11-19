@@ -69,7 +69,7 @@
         .energy { height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; overflow: hidden; width: 180px; }
         .energy > span { display: block; height: 100%; width: 0%; background: linear-gradient(90deg,#4dabf7,#ff6b6b); }
         /* 打赏弹窗样式 */
-        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 999; }
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 1002; }
         .modal.show { display: flex; }
         .modal-box { background: #111; color: #fff; border-radius: 12px; padding: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); max-width: 80vw; }
         .modal-box h3 { margin: 0 0 8px; font-weight: 600; }
@@ -102,23 +102,17 @@
 
         /* 雅思口语陪练入口与弹窗 */
         .floating-coach {
-            position: fixed; left: 50%; top: 50%; z-index: 1000;
-            transform: translate(-50%, -50%);
+            position: fixed; right: 14px; bottom: 170px; z-index: 1000;
             background: linear-gradient(90deg,#4dabf7,#845ef7);
             color: #fff; border: none; border-radius: 999px;
             padding: 14px 18px; font-weight: 700; font-size: 16px;
             box-shadow: 0 10px 26px rgba(132,94,247,0.45);
             cursor: pointer; display: flex; align-items: center; gap: 8px;
-            transition: box-shadow .2s ease;
-            animation: pulseCenter 2.2s infinite;
+            transition: transform .15s ease, box-shadow .2s ease;
+            animation: pulse 2.2s infinite;
         }
-        .floating-coach:hover { box-shadow: 0 14px 32px rgba(132,94,247,0.55); }
-        .floating-coach::after {
-            content: ""; position: absolute; inset: -6px; border-radius: 999px;
-            box-shadow: 0 0 0 3px rgba(132,94,247,0.45);
-            animation: ring 1.8s ease-out infinite; pointer-events: none;
-        }
-        @keyframes pulseCenter { 0%{transform: translate(-50%,-50%) scale(1)} 50%{transform: translate(-50%,-50%) scale(1.05)} 100%{transform: translate(-50%,-50%) scale(1)} }
+        .floating-coach:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(132,94,247,0.55); }
+        .floating-coach::after { content: ""; position: absolute; inset: -6px; border-radius: 999px; box-shadow: 0 0 0 3px rgba(132,94,247,0.45); animation: ring 1.8s ease-out infinite; pointer-events: none; }
         @keyframes ring { 0%{opacity:.8; transform:scale(1)} 100%{opacity:0; transform:scale(1.25)} }
         .coach-modal { position: fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.6); z-index: 999; }
         .coach-modal.show { display:flex; }
@@ -129,6 +123,8 @@
         .coach-log p { margin:6px 0; }
         .coach-footer { display:flex; gap:8px; margin-top:10px; justify-content:flex-end; }
         .tag { padding:2px 8px; border-radius:999px; background:#1b1b1b; font-size:12px; }
+        .pron-panel { display:flex; gap:10px; flex-wrap:wrap; margin:8px 0; }
+        .pron-item { background:#1b1b1b; border-radius:8px; padding:8px 10px; font-size:12px; }
     </style>
 </head>
 <body>
@@ -198,8 +194,24 @@
                 <button id="coachStart" class="btn small secondary">开始</button>
                 <button id="coachStop" class="btn small">结束</button>
                 <button id="coachExport" class="btn small">导出记录</button>
+                <label style="display:flex;align-items:center;gap:6px"><input id="aiCoachEnable" type="checkbox"> 接入AI</label>
+                <input id="aiModelInput" type="text" placeholder="模型，如 gpt-4o-mini" style="width:160px">
+                <input id="aiApiBase" type="text" placeholder="API 基址，如 https://api.openai.com/v1" style="width:220px">
+                <input id="aiApiKey" type="password" placeholder="API Key" style="width:220px">
+                <button id="aiSaveBtn" class="btn small secondary">保存AI配置</button>
+                <select id="aiLang">
+                    <option value="zh">中文反馈</option>
+                    <option value="en">英文反馈</option>
+                </select>
             </div>
             <div id="coachStatus" class="status"></div>
+            <div class="pron-panel">
+                <label style="display:flex;align-items:center;gap:6px"><input id="pronEnable" type="checkbox" checked> 发音分析</label>
+                <div class="pron-item">音量 <span id="pronVol">-</span></div>
+                <div class="pron-item">音高 <span id="pronPitch">-</span></div>
+                <div class="pron-item">语速 <span id="pronRate">-</span></div>
+                <div class="pron-item">停顿 <span id="pronPauses">-</span></div>
+            </div>
             <div id="coachLog" class="coach-log" aria-live="polite"></div>
             <div class="coach-footer">
                 <input id="coachText" type="text" placeholder="没有麦克风时在此输入回答" style="flex:1; padding:8px; border-radius:6px; border:none; background:#1b1b1b; color:#fff;">
@@ -527,6 +539,16 @@
             const coachText = document.getElementById('coachText');
             const coachSend = document.getElementById('coachSend');
             const coachStatus = document.getElementById('coachStatus');
+            const aiCoachEnable = document.getElementById('aiCoachEnable');
+            const aiModelInput = document.getElementById('aiModelInput');
+            const aiApiBase = document.getElementById('aiApiBase');
+            const aiApiKey = document.getElementById('aiApiKey');
+            const aiSaveBtn = document.getElementById('aiSaveBtn');
+            const pronEnable = document.getElementById('pronEnable');
+            const pronVol = document.getElementById('pronVol');
+            const pronPitch = document.getElementById('pronPitch');
+            const pronRate = document.getElementById('pronRate');
+            const pronPauses = document.getElementById('pronPauses');
             const donateModal = document.getElementById('donateModal');
             const closeDonate = document.getElementById('closeDonate');
             const donateImg = document.getElementById('donateImg');
@@ -637,10 +659,10 @@
                 }
             });
             donateImg.addEventListener('load', () => { donateFallback.style.display = 'none'; });
-            donateBtn.addEventListener('click', () => { donateModal.classList.add('show'); loadDonateImage(); });
-            floatingDonate.addEventListener('click', () => { donateModal.classList.add('show'); loadDonateImage(); });
-            closeDonate.addEventListener('click', () => { donateModal.classList.remove('show'); });
-            donateModal.addEventListener('click', (e) => { if (e.target === donateModal) donateModal.classList.remove('show'); });
+            donateBtn.addEventListener('click', () => { donateModal.classList.add('show'); loadDonateImage(); coachModal.classList.remove('show'); floatingCoach.style.display='none'; });
+            floatingDonate.addEventListener('click', () => { donateModal.classList.add('show'); loadDonateImage(); coachModal.classList.remove('show'); floatingCoach.style.display='none'; });
+            closeDonate.addEventListener('click', () => { donateModal.classList.remove('show'); floatingCoach.style.display='flex'; });
+            donateModal.addEventListener('click', (e) => { if (e.target === donateModal) { donateModal.classList.remove('show'); floatingCoach.style.display='flex'; } });
 
             // ====== 雅思陪练逻辑 ======
             const ieltsBank = {
@@ -681,11 +703,57 @@
             };
 
             let recog; let recognizing = false; let transcript = [];
+            let aiCoachOn = false; let aiConf = {base:'', key:'', model:''};
+            let micCtx; let micAnalyser; let micStream; let micTimer; let lastVol = 0; let pitchArr = []; let volArr = []; let pauseCount = 0; let startTs = 0; let wordsSpoken = 0;
+            function loadAiConf(){
+                aiCoachOn = localStorage.getItem('ai.enabled') === '1';
+                aiConf.base = localStorage.getItem('ai.base') || '';
+                aiConf.key = localStorage.getItem('ai.key') || '';
+                aiConf.model = localStorage.getItem('ai.model') || '';
+                aiCoachEnable.checked = aiCoachOn;
+                aiApiBase.value = aiConf.base || 'https://api.openai.com/v1';
+                aiModelInput.value = aiConf.model || 'gpt-4o-mini';
+                aiApiKey.value = aiConf.key || '';
+            }
+            function saveAiConf(){
+                aiConf.base = aiApiBase.value.trim();
+                aiConf.key = aiApiKey.value.trim();
+                aiConf.model = aiModelInput.value.trim();
+                localStorage.setItem('ai.base', aiConf.base);
+                localStorage.setItem('ai.key', aiConf.key);
+                localStorage.setItem('ai.model', aiConf.model);
+            }
+            loadAiConf();
+            aiCoachEnable.addEventListener('change', () => { aiCoachOn = aiCoachEnable.checked; localStorage.setItem('ai.enabled', aiCoachOn ? '1' : '0'); });
+            aiSaveBtn.addEventListener('click', () => { saveAiConf(); coachStatus.textContent = '已保存AI配置'; });
+            async function aiFeedback(text){
+                if(!aiCoachOn || !aiConf.base || !aiConf.key || !aiConf.model){ giveFeedback(text); setTimeout(askNext, 1200); return; }
+                try{
+                    coachStatus.textContent = 'AI评估中…';
+                    const langSel = (document.getElementById('aiLang')||{value:'zh'}).value;
+                    const feedbackLang = langSel === 'en' ? 'English' : 'Chinese';
+                    const followLang = 'English';
+                    const sys = `You are an IELTS speaking coach. Evaluate the user's answer and provide brief ${feedbackLang} feedback with numeric bands (0-9) for Fluency, Lexical Resource, Grammar, Pronunciation. Then suggest one ${followLang} follow-up question. Output as: 反馈/Feedback: ...\n建议/Suggestions: ...\nNext: <question>`;
+                    const payload = { model: aiConf.model, messages: [ { role:'system', content: sys }, { role:'user', content: text } ] };
+                    const r = await fetch(aiConf.base.replace(/\/$/, '') + '/chat/completions', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': 'Bearer ' + aiConf.key }, body: JSON.stringify(payload) });
+                    const j = await r.json();
+                    const content = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content ? j.choices[0].message.content.trim() : '';
+                    if(content){
+                        log('Coach', content);
+                        transcript.push({role:'coach', text: content});
+                        coachSpeak(content);
+                        const m = content.match(/Next:\s*(.+)$/m);
+                        if(m){ setTimeout(() => { ask(m[1]); }, 1000); } else { setTimeout(askNext, 1200); }
+                    } else { giveFeedback(text); setTimeout(askNext, 1200); }
+                } catch(e){ giveFeedback(text); setTimeout(askNext, 1200); }
+            }
             const hasSTT = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
             function coachSpeak(text) {
                 try {
                     const u = new SpeechSynthesisUtterance(text);
-                    u.rate = 1; u.pitch = 1; u.lang = 'en-US';
+                    u.rate = 1; u.pitch = 1;
+                    const langSel = (document.getElementById('aiLang')||{value:'zh'}).value;
+                    u.lang = langSel === 'en' ? 'en-US' : 'zh-CN';
                     speechSynthesis.cancel(); speechSynthesis.speak(u);
                 } catch (e) {}
             }
@@ -706,16 +774,29 @@
                 log('Coach', prompt);
                 coachSpeak(prompt);
             }
+            function ask(q) { const prompt = typeof q === 'string' ? q : q; log('Coach', prompt); coachSpeak(prompt); }
+            async function askAiNext(){
+                if(!aiCoachOn || !aiConf.base || !aiConf.key || !aiConf.model){ askNext(); return; }
+                try{
+                    const part = coachPart.value; const topic = coachTopic.value;
+                    const sys = `You are an IELTS speaking examiner. Generate one English question for Part ${part} about ${topic}. Only output the question.`;
+                    const payload = { model: aiConf.model, messages: [ { role:'system', content: sys }, { role:'user', content: 'Generate one question.' } ] };
+                    const r = await fetch(aiConf.base.replace(/\/$/, '') + '/chat/completions', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization': 'Bearer ' + aiConf.key }, body: JSON.stringify(payload) });
+                    const j = await r.json();
+                    const q = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content ? j.choices[0].message.content.trim() : '';
+                    if(q){ ask(q); } else { askNext(); }
+                } catch(e){ askNext(); }
+            }
             function startRecognition() {
                 if (!hasSTT) { coachStatus.textContent = '当前浏览器不支持语音识别，请使用文本输入。'; return; }
                 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
                 recog = new SR(); recog.lang = 'en-US'; recog.interimResults = false; recog.continuous = false;
                 recognizing = true; coachStatus.textContent = '正在聆听，请开始回答…';
-                recog.onresult = (e) => {
+            recog.onresult = (e) => {
                     const text = e.results[0][0].transcript;
                     log('You', text); transcript.push({role:'user', text});
-                    giveFeedback(text);
-                    setTimeout(askNext, 1200);
+                    reportPron(text);
+                    aiFeedback(text);
                 };
                 recog.onerror = (e) => { coachStatus.textContent = '识别错误：' + e.error; recognizing = false; };
                 recog.onend = () => { recognizing = false; coachStatus.textContent = '已停止聆听'; };
@@ -742,13 +823,60 @@
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ielts_practice.txt'; a.click(); URL.revokeObjectURL(a.href);
             }
 
-            floatingCoach.addEventListener('click', () => { coachModal.classList.add('show'); coachLog.innerHTML=''; log('Coach','Welcome! Let\'s practice IELTS Speaking.'); askNext(); startRecognition(); });
-            closeCoach.addEventListener('click', () => { coachModal.classList.remove('show'); stopRecognition(); });
-            coachStart.addEventListener('click', () => { coachLog.innerHTML=''; askNext(); startRecognition(); });
-            coachStop.addEventListener('click', () => { stopRecognition(); coachStatus.textContent='已停止陪练'; });
+            floatingCoach.addEventListener('click', () => { coachModal.classList.add('show'); coachLog.innerHTML=''; log('Coach','Welcome! Let\'s practice IELTS Speaking.'); askAiNext(); startRecognition(); startPron(); floatingCoach.style.display='none'; });
+            closeCoach.addEventListener('click', () => { coachModal.classList.remove('show'); stopRecognition(); stopPron(); floatingCoach.style.display='flex'; });
+            coachStart.addEventListener('click', () => { coachLog.innerHTML=''; askAiNext(); startRecognition(); startPron(); });
+            coachStop.addEventListener('click', () => { stopRecognition(); stopPron(); coachStatus.textContent='已停止陪练'; });
             coachExport.addEventListener('click', exportTxt);
-            coachSend.addEventListener('click', () => { const text = coachText.value.trim(); if(!text) return; coachText.value=''; log('You', text); giveFeedback(text); setTimeout(askNext, 1200); });
+            coachSend.addEventListener('click', () => { const text = coachText.value.trim(); if(!text) return; coachText.value=''; log('You', text); transcript.push({role:'user', text}); aiFeedback(text); });
         });
     </script>
 </body>
 </html>
+            function startPron(){
+                if(!pronEnable.checked) return;
+                startTs = Date.now(); wordsSpoken = 0; pauseCount = 0; pitchArr = []; volArr = []; lastVol = 0;
+                navigator.mediaDevices.getUserMedia({audio:true}).then(s=>{
+                    micStream = s; micCtx = new (window.AudioContext||window.webkitAudioContext)();
+                    const src = micCtx.createMediaStreamSource(s); micAnalyser = micCtx.createAnalyser(); micAnalyser.fftSize = 2048; src.connect(micAnalyser);
+                    const buf = new Float32Array(micAnalyser.fftSize);
+                    micTimer = setInterval(()=>{
+                        micAnalyser.getFloatTimeDomainData(buf);
+                        let rms = 0; for(let i=0;i<buf.length;i++){ rms += buf[i]*buf[i]; } rms = Math.sqrt(rms/buf.length);
+                        const vol = Math.round(rms*1000)/10;
+                        volArr.push(vol);
+                        pronVol.textContent = vol.toFixed(1);
+                        if(vol < 1 && lastVol >= 1) pauseCount += 1;
+                        lastVol = vol;
+                        const pitch = estimatePitch(buf, micCtx.sampleRate);
+                        if(pitch>0){ pitchArr.push(pitch); pronPitch.textContent = Math.round(pitch) + ' Hz'; }
+                        pronPauses.textContent = String(pauseCount);
+                        const elapsedMin = Math.max(0.001,(Date.now()-startTs)/60000);
+                        pronRate.textContent = (wordsSpoken/elapsedMin).toFixed(0) + ' WPM';
+                    }, 200);
+                }).catch(()=>{});
+            }
+            function stopPron(){
+                if(micTimer){ clearInterval(micTimer); micTimer = null; }
+                if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream = null; }
+                if(micCtx){ try{ micCtx.close(); }catch(e){} micCtx = null; }
+            }
+            function estimatePitch(buf, sr){
+                let size = buf.length; let maxShift = Math.floor(size/2); let best = 0; let bestCorr = 0;
+                for(let shift=40; shift<maxShift; shift++){
+                    let corr = 0; for(let i=0;i<maxShift;i++){ corr += buf[i]*buf[i+shift]; }
+                    if(corr>bestCorr){ bestCorr=corr; best=shift; }
+                }
+                const freq = best>0 ? sr/best : 0; if(freq<60||freq>400) return 0; return freq;
+            }
+            function reportPron(text){
+                wordsSpoken += text.trim().split(/\s+/).length;
+                const avgVol = volArr.length? (volArr.reduce((a,b)=>a+b,0)/volArr.length):0;
+                const avgPitch = pitchArr.length? (pitchArr.reduce((a,b)=>a+b,0)/pitchArr.length):0;
+                const pitchVar = pitchArr.length? Math.sqrt(pitchArr.map(p=>Math.pow(p-avgPitch,2)).reduce((a,b)=>a+b,0)/pitchArr.length):0;
+                const elapsedMin = Math.max(0.001,(Date.now()-startTs)/60000);
+                const wpm = Math.round(wordsSpoken/elapsedMin);
+                const msg = `Pronunciation: volume≈${avgVol.toFixed(1)}, pitch≈${Math.round(avgPitch)}Hz, jitter≈${Math.round(pitchVar)}Hz, pauses=${pauseCount}, rate=${wpm} WPM`;
+                log('Coach', msg);
+                transcript.push({role:'coach', text: msg});
+            }
